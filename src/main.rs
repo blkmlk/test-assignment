@@ -5,7 +5,7 @@ const THRESHOLD: usize = 5;
 
 fn main() {}
 
-fn calc_tasks_v1<
+fn handle_tasks_v1<
     T: Clone + Send + 'static,
     R: Send + 'static,
     F: Fn(T) -> R + Clone + Send + 'static,
@@ -19,23 +19,23 @@ fn calc_tasks_v1<
 
     let mut result = Vec::with_capacity(input.len());
     let mut joins = vec![];
-    for i in input.chunks(THRESHOLD) {
+    for chunk in input.chunks(THRESHOLD) {
         let f = f.clone();
-        let chunk: Vec<T> = i.to_vec();
+        let chunk: Vec<T> = chunk.to_vec();
 
-        let j = thread::spawn(move || chunk.into_iter().map(|x: T| f(x)).collect::<Vec<R>>());
+        let join = thread::spawn(move || chunk.into_iter().map(|x: T| f(x)).collect::<Vec<R>>());
 
-        joins.push(j);
+        joins.push(join);
     }
 
-    for j in joins {
-        result.extend(j.join().unwrap());
+    for join in joins {
+        result.extend(join.join().unwrap());
     }
 
     result
 }
 
-fn calc_tasks_v2<T: Send + 'static, R: Send + 'static, F: Fn(T) -> R + Clone + Send + 'static>(
+fn handle_tasks_v2<T: Send + 'static, R: Send + 'static, F: Fn(T) -> R + Clone + Send + 'static>(
     input: Vec<T>,
     f: F,
 ) -> Vec<R> {
@@ -52,33 +52,33 @@ fn calc_tasks_v2<T: Send + 'static, R: Send + 'static, F: Fn(T) -> R + Clone + S
         let tx = out_tx.clone();
         let f = f.clone();
 
-        let j = thread::spawn(move || {
-            for (i, v) in rx {
-                tx.send((i, f(v))).unwrap();
+        let join = thread::spawn(move || {
+            for (i, t) in rx {
+                tx.send((i, f(t))).unwrap();
             }
         });
 
-        joins.push(j);
+        joins.push(join);
     }
     drop(out_tx);
 
     let mut result = Vec::with_capacity(input.len());
     unsafe {result.set_len(input.len())};
 
-    let j = thread::spawn(move || {
-        for (i, v) in input.into_iter().enumerate() {
-            in_tx.send((i, v)).unwrap();
+    let tx_join = thread::spawn(move || {
+        for (i, t) in input.into_iter().enumerate() {
+            in_tx.send((i, t)).unwrap();
         }
         drop(in_tx);
     });
 
-    for (i, v) in out_rx {
-        result[i] = v;
+    for (i, r) in out_rx {
+        result[i] = r;
     }
 
-    j.join().unwrap();
-    for j in joins {
-        j.join().unwrap()
+    tx_join.join().unwrap();
+    for join in joins {
+        join.join().unwrap()
     }
 
     result
@@ -86,34 +86,34 @@ fn calc_tasks_v2<T: Send + 'static, R: Send + 'static, F: Fn(T) -> R + Clone + S
 
 #[cfg(test)]
 mod test {
-    use crate::{calc_tasks_v1, calc_tasks_v2};
+    use crate::{handle_tasks_v1, handle_tasks_v2};
 
     #[test]
-    fn test_calc_tasks_v1_part_1() {
+    fn test_handle_tasks_v1_part_1() {
         let f = |x: i32| -> i32 { x + 1 };
 
-        assert_eq!(calc_tasks_v1(vec![1, 2, 3], f), vec![2, 3, 4]);
-        assert_eq!(calc_tasks_v1(vec![], f), vec![]);
+        assert_eq!(handle_tasks_v1(vec![1, 2, 3], f), vec![2, 3, 4]);
+        assert_eq!(handle_tasks_v1(vec![], f), vec![]);
         assert_eq!(
-            calc_tasks_v1(vec![1, 2, 3, 4, 5, 6, 7], f),
+            handle_tasks_v1(vec![1, 2, 3, 4, 5, 6, 7], f),
             vec![2, 3, 4, 5, 6, 7, 8]
         );
     }
 
     #[test]
-    fn test_calc_tasks_v2_part_1() {
+    fn test_handle_tasks_v2_part_1() {
         let f = |x: i32| -> i32 { x + 1 };
 
-        assert_eq!(calc_tasks_v2(vec![1, 2, 3], f), vec![2, 3, 4]);
-        assert_eq!(calc_tasks_v2(vec![], f), vec![]);
+        assert_eq!(handle_tasks_v2(vec![1, 2, 3], f), vec![2, 3, 4]);
+        assert_eq!(handle_tasks_v2(vec![], f), vec![]);
         assert_eq!(
-            calc_tasks_v2(vec![1, 2, 3, 4, 5, 6, 7], f),
+            handle_tasks_v2(vec![1, 2, 3, 4, 5, 6, 7], f),
             vec![2, 3, 4, 5, 6, 7, 8]
         );
     }
 
     #[test]
-    fn test_calc_tasks_part_2() {
+    fn test_handle_tasks_part_2() {
         const K: u64 = 8;
         let f = |x: u64| -> u64 {
             if x == 1 {
@@ -136,8 +136,8 @@ mod test {
             n
         };
 
-        assert_eq!(calc_tasks_v2(vec![], f), vec![]);
-        assert_eq!(calc_tasks_v2(vec![1, 2, 3, 100], f), vec![0, 1, 7, 88]);
+        assert_eq!(handle_tasks_v2(vec![], f), vec![]);
+        assert_eq!(handle_tasks_v2(vec![1, 2, 3, 100], f), vec![0, 1, 7, 88]);
 
         ()
     }

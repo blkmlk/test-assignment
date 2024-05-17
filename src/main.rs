@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::thread;
 
 const THRESHOLD: usize = 5;
@@ -137,6 +136,7 @@ mod test {
         };
 
         assert_eq!(handle_tasks_v2(vec![], f), vec![]);
+        assert_eq!(handle_tasks_v2(vec![0], f), vec![0]);
         assert_eq!(handle_tasks_v2(vec![1, 2, 3, 100], f), vec![0, 1, 7, 88]);
 
         ()

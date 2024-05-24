@@ -1,4 +1,5 @@
-use std::thread;
+use std::mem::MaybeUninit;
+use std::{mem, thread};
 
 const THRESHOLD: usize = 5;
 
@@ -62,7 +63,7 @@ fn handle_tasks_v2<T: Send + 'static, R: Send + 'static, F: Fn(T) -> R + Clone +
     drop(out_tx);
 
     let mut result = Vec::with_capacity(input.len());
-    unsafe {result.set_len(input.len())};
+    result.resize_with(input.len(), MaybeUninit::uninit);
 
     let tx_join = thread::spawn(move || {
         for (i, t) in input.into_iter().enumerate() {
@@ -72,7 +73,7 @@ fn handle_tasks_v2<T: Send + 'static, R: Send + 'static, F: Fn(T) -> R + Clone +
     });
 
     for (i, r) in out_rx {
-        result[i] = r;
+        result[i] = MaybeUninit::new(r);
     }
 
     tx_join.join().unwrap();
@@ -80,7 +81,7 @@ fn handle_tasks_v2<T: Send + 'static, R: Send + 'static, F: Fn(T) -> R + Clone +
         join.join().unwrap()
     }
 
-    result
+    unsafe {mem::transmute::<_,Vec<R>>(result)}
 }
 
 #[cfg(test)]

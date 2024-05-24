@@ -6,7 +6,7 @@ const THRESHOLD: usize = 5;
 fn main() {}
 
 fn handle_tasks_v1<
-    T: Clone + Send + 'static,
+    T: Clone + Send + Sync + 'static,
     R: Send + 'static,
     F: Fn(T) -> R + Clone + Send + 'static,
 >(
@@ -17,22 +17,25 @@ fn handle_tasks_v1<
         return input.into_iter().map(f).collect();
     }
 
-    let mut result = Vec::with_capacity(input.len());
-    let mut joins = vec![];
-    for chunk in input.chunks(THRESHOLD) {
-        let f = f.clone();
-        let chunk: Vec<T> = chunk.to_vec();
+    thread::scope(|s| {
+        let mut result = Vec::with_capacity(input.len());
+        let mut joins = vec![];
+        for chunk in input.chunks(THRESHOLD) {
+            let f = f.clone();
 
-        let join = thread::spawn(move || chunk.into_iter().map(|x: T| f(x)).collect::<Vec<R>>());
+            let join = s.spawn(move || {
+                chunk.into_iter().map(|x|f(x.clone())).collect::<Vec<R>>()
+            });
 
-        joins.push(join);
-    }
+            joins.push(join);
+        }
 
-    for join in joins {
-        result.extend(join.join().unwrap());
-    }
+        for j in joins {
+            result.extend(j.join().unwrap())
+        }
 
-    result
+        result
+    })
 }
 
 fn handle_tasks_v2<T: Send + 'static, R: Send + 'static, F: Fn(T) -> R + Clone + Send + 'static>(
